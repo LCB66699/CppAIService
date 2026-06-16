@@ -1,0 +1,26 @@
+# Build output
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.exe
+http_server
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
+
+# Env files (may contain secrets)
+.env
+.env.local
