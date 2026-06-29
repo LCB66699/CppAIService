@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libopencv-dev \
     nlohmann-json3-dev \
+    libboost-system-dev \
+    libboost-chrono-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 --branch v2.0.0 https://github.com/chenshuo/muduo.git /tmp/muduo && \

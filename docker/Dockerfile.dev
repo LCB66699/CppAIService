@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-dev \
     nlohmann-json3-dev \
     libgtest-dev \
+    libboost-system-dev \
+    libboost-chrono-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 编译安装 muduo (sed 去掉 -Werror, GCC 11+ 兼容)
