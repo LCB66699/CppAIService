@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone --depth 1 --branch v2.0.0 https://github.com/chenshuo/muduo.git /tmp/muduo && \
     cd /tmp/muduo && \
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DMUDUO_BUILD_EXAMPLES=OFF -DCMAKE_CXX_FLAGS="-Wno-error" && \
+    find . -name CMakeLists.txt -exec sed -i 's/-Werror//g' {} + && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DMUDUO_BUILD_EXAMPLES=OFF && \
     cmake --build build -j$(nproc) && \
     cmake --install build && \
     ldconfig && \
