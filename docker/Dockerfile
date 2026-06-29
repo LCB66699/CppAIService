@@ -24,7 +24,7 @@ RUN git clone --depth 1 --branch v2.0.0 https://github.com/chenshuo/muduo.git /t
     ldconfig && \
     rm -rf /tmp/muduo
 
-RUN git clone --depth 1 --branch v2.5.2 https://github.com/alanxz/SimpleAmqpClient.git /tmp/simpleamqpclient && \
+RUN git clone --depth 1 https://github.com/alanxz/SimpleAmqpClient.git /tmp/simpleamqpclient && \
     cd /tmp/simpleamqpclient && \
     mkdir build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
