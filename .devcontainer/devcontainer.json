@@ -1,0 +1,41 @@
+{
+  "name": "CppAIService Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "twxs.cmake",
+        "xaver.clang-format",
+        "matepek.vscode-catch2-test-adapter",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "[cpp]": {
+          "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+        },
+        "cmake.sourceDirectory": "/workspace",
+        "cmake.buildDirectory": "/workspace/build",
+        "cmake.configureOnOpen": false,
+        "clangd.arguments": [
+          "--background-index",
+          "--clang-tidy",
+          "-j=4"
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "postCreateCommand": "cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build -j$(nproc) && echo 'Dev container ready.'",
+
+  "remoteUser": "root"
+}

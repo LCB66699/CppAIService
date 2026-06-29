@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  MYSQL_ROOT_PASSWORD: root123
+  MYSQL_DATABASE: chat_service
+
+jobs:
+  # ── Job 1: 编译 + 单元测试 + 静态分析 ──
+  build-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev Docker image
+        run: docker build -f docker/Dockerfile.dev -t cppaiservice:dev .
+
+      - name: CMake configure and build
+        run: >
+          docker run --rm -v ${{ github.workspace }}/build:/workspace/build
+          cppaiservice:dev bash -c "
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug &&
+            cmake --build build -j$(nproc)
+          "
+
+      - name: Run unit tests
+        run: >
+          docker run --rm cppaiservice:dev bash -c "
+            cd build && ctest --output-on-failure -R Unit
+          "
+
+      - name: Static analysis (clang-tidy)
+        continue-on-error: true
+        run: >
+          docker run --rm cppaiservice:dev bash -c "
+            clang-tidy --version &&
+            find HttpServer/src AIApps/ChatServer/src -name '*.cpp' |
+            head -20 |
+            xargs clang-tidy -p build --warnings-as-errors='*' 2>&1 |
+            tail -60
+          "
+
+      - name: Static analysis (cppcheck)
+        continue-on-error: true
+        run: >
+          docker run --rm cppaiservice:dev bash -c "
+            cppcheck --enable=all --inconclusive --std=c++17
+            HttpServer/src AIApps/ChatServer/src 2>&1 | tail -40
+          "
+
+  # ── Job 2: 集成测试 (需要 MySQL + RabbitMQ) ──
+  integration:
+    needs: build-and-unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev Docker image
+        run: docker build -f docker/Dockerfile.dev -t cppaiservice:dev .
+
+      - name: Start MySQL and RabbitMQ
+        run: |
+          docker compose -f docker-compose.yml up -d mysql rabbitmq
+          echo "Waiting for services to be healthy..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.yml exec -T mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+              echo "MySQL is ready."
+              break
+            fi
+            sleep 3
+          done
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.yml exec -T rabbitmq rabbitmq-diagnostics check_port_connectivity 2>/dev/null; then
+              echo "RabbitMQ is ready."
+              break
+            fi
+            sleep 3
+          done
+
+      - name: Build project and integration tests
+        run: >
+          docker run --rm
+          --network cppaiservice-main_default
+          -e MYSQL_HOST=mysql
+          -e RABBITMQ_HOST=rabbitmq
+          cppaiservice:dev bash -c "
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug &&
+            cmake --build build -j$(nproc)
+          "
+
+      - name: Run integration tests
+        run: >
+          docker run --rm
+          --network cppaiservice-main_default
+          -e MYSQL_HOST=mysql
+          -e RABBITMQ_HOST=rabbitmq
+          -e API_BASE_URL=http://localhost:8117
+          cppaiservice:dev bash -c "
+            cd build && ctest --output-on-failure -R Integration
+          "
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.yml down
+
+  # ── Job 3: E2E 冒烟测试 (完整生产栈) ──
+  e2e:
+    needs: integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and start production stack
+        run: docker compose up -d --build
+
+      - name: Wait for app readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8117/entry > /dev/null 2>&1; then
+              echo "App is ready (attempt $i)."
+              exit 0
+            fi
+            echo "Waiting for app... ($i/30)"
+            sleep 3
+          done
+          echo "App failed to start." && exit 1
+
+      - name: E2E smoke — entry page
+        run: curl -sf http://localhost:8117/entry > /dev/null
+
+      - name: E2E smoke — login endpoint
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8117/login \
+            -H "Content-Type: application/json" \
+            -d '{"username":"e2e_test","password":"test123"}')
+          echo "Login response code: $HTTP_CODE"
+          [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 401 ]
+
+      - name: E2E smoke — register new user
+        run: |
+          RESP=$(curl -s -X POST http://localhost:8117/register \
+            -H "Content-Type: application/json" \
+            -d '{"username":"e2e_test_user","password":"test123"}')
+          echo "Register response: $RESP"
+          echo "$RESP" | grep -q '"success"' || echo "Note: user may already exist"
+
+      - name: E2E smoke — chat page
+        run: curl -sf http://localhost:8117/chat > /dev/null
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

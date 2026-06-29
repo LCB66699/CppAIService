@@ -1,0 +1,68 @@
+version: "3.8"
+
+# Dev Containers 专用编排 — VS Code 自动管理生命周期
+# 不要手动 docker compose up，由 VS Code Remote-Containers 接管
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "${APP_PORT:-8117}:8117"
+    volumes:
+      - ..:/workspace:cached
+      - build_cache:/workspace/build
+      - vscode_extensions:/root/.vscode-server/extensions
+      - vscode_insiders_extensions:/root/.vscode-server-insiders/extensions
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY:-}
+      - Knowledge_Base_ID=${Knowledge_Base_ID:-}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    command: ["sleep", "infinity"]
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: chat_service
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
+  build_cache:
+  vscode_extensions:
+  vscode_insiders_extensions:

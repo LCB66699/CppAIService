@@ -1,0 +1,33 @@
+version: "3.8"
+
+# 本地单元测试专用 — 无需 MySQL / RabbitMQ
+# 用法:
+#   docker compose -f docker-compose.test.yml up --build
+#   docker compose -f docker-compose.test.yml run --rm app bash   # 进入容器手动调试
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    volumes:
+      - .:/workspace
+      - build_cache:/workspace/build
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        echo "=== CMake Configure ==="
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug
+        echo "=== CMake Build ==="
+        cmake --build build -j$$(nproc)
+        echo "=== Run Unit Tests ==="
+        cd build && ctest --output-on-failure -R Unit
+        echo "=== All Tests Passed ==="
+
+volumes:
+  build_cache:

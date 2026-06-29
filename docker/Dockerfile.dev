@@ -1,0 +1,58 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+
+# 基础工具链 + 项目依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential g++-11 cmake make git wget ca-certificates \
+    gdb valgrind clang-tidy cppcheck pkg-config ccache \
+    libmysqlcppconn-dev \
+    librabbitmq-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libopencv-dev \
+    nlohmann-json3-dev \
+    libgtest-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 编译安装 muduo
+RUN git clone --depth 1 --branch v2.0.0 https://github.com/chenshuo/muduo.git /tmp/muduo && \
+    cd /tmp/muduo && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DMUDUO_BUILD_EXAMPLES=OFF && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build && \
+    ldconfig && \
+    rm -rf /tmp/muduo
+
+# 编译安装 SimpleAmqpClient (依赖 librabbitmq)
+RUN git clone --depth 1 --branch v2.5.2 https://github.com/alanxz/SimpleAmqpClient.git /tmp/simpleamqpclient && \
+    cd /tmp/simpleamqpclient && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . -j$(nproc) && \
+    cmake --install . && \
+    ldconfig && \
+    rm -rf /tmp/simpleamqpclient
+
+# 下载安装 ONNX Runtime 预编译包
+RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.17.0/onnxruntime-linux-x64-1.17.0.tgz && \
+    tar xzf onnxruntime-linux-x64-1.17.0.tgz && \
+    cp -r onnxruntime-linux-x64-1.17.0/include/* /usr/local/include/ && \
+    cp -r onnxruntime-linux-x64-1.17.0/lib/* /usr/local/lib/ && \
+    ldconfig && \
+    rm -rf onnxruntime-linux-x64-1.17.0*
+
+# 编译安装 GoogleTest
+RUN cd /usr/src/googletest && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build && \
+    rm -rf build
+
+# 设置默认编译器为 g++-11
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
