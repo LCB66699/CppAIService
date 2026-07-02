@@ -25,7 +25,7 @@ jobs:
 
       - name: CMake configure and build
         run: >
-          docker run --rm -v ${{ github.workspace }}/build:/workspace/build
+          docker run --rm -v ${{ github.workspace }}:/workspace
           cppaiservice:dev bash -c "
             cmake -B build -DCMAKE_BUILD_TYPE=Debug &&
             cmake --build build -j$(nproc)
@@ -33,14 +33,16 @@ jobs:
 
       - name: Run unit tests
         run: >
-          docker run --rm cppaiservice:dev bash -c "
+          docker run --rm -v ${{ github.workspace }}:/workspace
+          cppaiservice:dev bash -c "
             cd build && ctest --output-on-failure -R Unit
           "
 
       - name: Static analysis (clang-tidy)
         continue-on-error: true
         run: >
-          docker run --rm cppaiservice:dev bash -c "
+          docker run --rm -v ${{ github.workspace }}:/workspace
+          cppaiservice:dev bash -c "
             clang-tidy --version &&
             find HttpServer/src AIApps/ChatServer/src -name '*.cpp' |
             head -20 |
@@ -51,7 +53,8 @@ jobs:
       - name: Static analysis (cppcheck)
         continue-on-error: true
         run: >
-          docker run --rm cppaiservice:dev bash -c "
+          docker run --rm -v ${{ github.workspace }}:/workspace
+          cppaiservice:dev bash -c "
             cppcheck --enable=all --inconclusive --std=c++17
             HttpServer/src AIApps/ChatServer/src 2>&1 | tail -40
           "
@@ -91,6 +94,7 @@ jobs:
       - name: Build project and integration tests
         run: >
           docker run --rm
+          -v ${{ github.workspace }}:/workspace
           --network cppaiservice-main_default
           -e MYSQL_HOST=mysql
           -e RABBITMQ_HOST=rabbitmq
@@ -102,6 +106,7 @@ jobs:
       - name: Run integration tests
         run: >
           docker run --rm
+          -v ${{ github.workspace }}:/workspace
           --network cppaiservice-main_default
           -e MYSQL_HOST=mysql
           -e RABBITMQ_HOST=rabbitmq
